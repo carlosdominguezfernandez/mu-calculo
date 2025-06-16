@@ -19,55 +19,66 @@ class ParityGame:
         self.nodes: list[ParityGameNode] = []
         self.node_map: dict[tuple, ParityGameNode] = {}
 
-    def get_node(self, arena_pos, tracking_state, symbol, player, priority) -> ParityGameNode:
-        key = (arena_pos, tracking_state, symbol, player)
+    def get_node(self, arena_pos, tracking_state, symbol) -> ParityGameNode:
+        key = (arena_pos, tracking_state, symbol)
         if key in self.node_map:
             return self.node_map[key]
 
         idx = len(self.nodes)
+        player = self.arena.positions[arena_pos].is_diamond
+        priority = self.tracking_aut.states[tracking_state].priority
         node = ParityGameNode(arena_pos, tracking_state, symbol, player, priority, idx)
         self.node_map[key] = node
         self.nodes.append(node)
         return node
 
-    def from_formula(self) -> ParityGameNode:
+    @staticmethod
+    def from_formula(formula) -> 'ParityGame':
+        apta = APTA().from_formula(formula)
+        apta.compute_total_priority()
+
+        arena = GameArena()
+        arena.emptyness_arena(apta, formula)
+
+        tracking = NPA().from_apta(apta)
+
+        game = ParityGame(arena, tracking)
+        game.build()
+        return game
+
+    def get_initial_node(self) -> ParityGameNode:
+        """
+        Devuelve el nodo inicial del juego, basado en la posición 0 de la arena y el estado 0 del NPA.
+        """
         arena_init = self.arena.positions[0]
         tracking_init = self.tracking_aut.states[0]
-        initial_node = self.get_node(
+        return self.get_node(
             arena_pos=0,
             tracking_state=tracking_init.idx,
-            symbol=None,
-            player=arena_init.is_diamond,
-            priority=tracking_init.priority
+            symbol=None
         )
-        return initial_node
 
     def expand_state(self, node: ParityGameNode):
         arena_pos = self.arena.positions[node.arena_position]
         tracking_state = self.tracking_aut.states[node.tracking_state]
 
-        # Regla 1 y 2: symbol is None
         if node.symbol is None:
-            if arena_pos.symbol is None:  # regla 1
+            if arena_pos.symbol is None:  # regla 2
                 for sigma, tgt_idx in arena_pos.next:
                     tgt_node = self.arena.positions[tgt_idx]
                     new_node = self.get_node(
                         arena_pos=tgt_idx,
                         tracking_state=node.tracking_state,
                         symbol=sigma,
-                        player=False,
-                        priority=tracking_state.priority
                     )
                     node.successors.add(new_node)
-            else:  # regla 2
+            else:  # regla 1
                 sigma = arena_pos.symbol
                 for d, tgt_idx in arena_pos.next:
                     new_node = self.get_node(
                         arena_pos=tgt_idx,
                         tracking_state=node.tracking_state,
                         symbol=(sigma, d),
-                        player=False,
-                        priority=tracking_state.priority
                     )
                     node.successors.add(new_node)
 
@@ -80,25 +91,31 @@ class ParityGame:
                 is_compatible = False
 
                 if label.type == Label.Type.CHOICE:
-                    if label.extra is None or label.extra == d:
+                    if label.extra is None:
                         is_compatible = True
-                    elif isinstance(label.extra, tuple) and all(item in d for item in label.extra):
-                        is_compatible = True
+                    elif isinstance(label.extra, tuple):
+                        is_compatible = all(d.get(q) == q_prime for q, q_prime in label.extra)
 
                 elif label.type == Label.Type.ANY:
-                    if not label.aprops:
-                        is_compatible = True
-                    else:
-                        is_compatible = all(sigma_dict.get(p) == val for p, val in label.aprops)
+                    is_compatible = True
+
+                elif label.type == Label.Type.STATE:
+                    if isinstance(d, int):
+                        if label.extra is None or d == label.extra:
+                            is_compatible = True
+
+                if is_compatible and label.aprops:
+                    is_compatible = all(
+                        (p not in sigma_dict or sigma_dict[p] == val)
+                        for p, val in label.aprops
+                    )
 
                 if is_compatible:
                     for t_prime in t_primes:
                         new_node = self.get_node(
                             arena_pos=node.arena_position,
                             tracking_state=t_prime,
-                            symbol=None,
-                            player=self.arena.positions[node.arena_position].is_diamond,
-                            priority=self.tracking_aut.states[t_prime].priority
+                            symbol=None
                         )
                         node.successors.add(new_node)
 
@@ -110,18 +127,25 @@ class ParityGame:
                 arena_pos=node.arena_position,
                 tracking_state=node.tracking_state,
                 symbol=None,
-                player=self.arena.positions[node.arena_position].is_diamond,
-                priority=tracking_state.priority
             )
             node.successors.add(new_node)
 
     def build(self):
-        pending = [self.from_formula()]
+        arena_init = self.arena.positions[0]
+        tracking_init = self.tracking_aut.states[0]
+
+        initial_node = self.get_node(
+            arena_pos=0,
+            tracking_state=tracking_init.idx,
+            symbol=None
+        )
+
+        pending = [initial_node]
         visited = set()
 
         while pending:
             node = pending.pop()
-            key = (node.arena_position, node.tracking_state, node.symbol, node.player)
+            key = (node.arena_position, node.tracking_state, node.symbol)
             if key in visited:
                 continue
             visited.add(key)
@@ -136,3 +160,13 @@ class ParityGame:
             print(f" Nodo {node.idx}: (Arena: {node.arena_position}, Track: {node.tracking_state}, Symbol: {node.symbol}), jugador={player}, prioridad={node.priority}")
             for succ in node.successors:
                 print(f"   → Nodo {succ.idx}")
+
+    def to_pgsolver_format(self, file_path: str):
+
+        with open(file_path, "w") as f:
+            for node in self.nodes:
+                priority = node.priority
+                player = 0 if node.player else 1  # 0 = existencial, 1 = universal
+                successors = ",".join(str(succ.idx) for succ in node.successors)
+                label = f"({node.arena_position},{node.tracking_state},{node.symbol})"
+                f.write(f"{node.idx} {priority} {player} {successors} \"{label}\"\n")
