@@ -33,7 +33,7 @@ class GameArena(Generic[Q, E]):
             self.symbol = symbol
             self.is_diamond = is_diamond
             self.is_box = not is_diamond
-            self.next: List[Tuple[object, int]] = []  # (etiqueta, índice destino)
+            self.next: List[Tuple[object, int]] = []
 
     def __init__(self):
         self.positions: List[GameArena.Position] = []
@@ -51,11 +51,6 @@ class GameArena(Generic[Q, E]):
         return self.position_map[key]
 
     def extract_alphabet(self, states: FrozenSet[int], aut: 'APTA[Q, E]') -> Set[FrozenSet[Tuple[str, bool]]]:
-        """Extrae las etiquetas sigma relevantes a partir de las transiciones salientes actuales.
-
-        Cada sigma es una función sobre el subconjunto de proposiciones relevantes,
-        representada como un conjunto de pares (p, b).
-        """
         labels = set()
         for q in states:
             labels |= get_propositions(aut.states[q].value)
@@ -107,7 +102,7 @@ class GameArena(Generic[Q, E]):
                 for successors in product(*choices):
                     for successor_combination in product(*successors):
                         d = frozenset((q, succ) for q, succ in zip(existentials, successor_combination))
-                        if d:  # solo guarda los d no vacíos
+                        if d: 
                             self.d_choices.add(d)
                         d_dict = dict(d)
                         s_prime = self.updatel(states, p, d_dict)
@@ -121,8 +116,7 @@ class GameArena(Generic[Q, E]):
 
     def updatel(self, s: Set[int], sigma: FrozenSet[Tuple[str, bool]], d: Dict[int, int]) -> Set[int]:
         new_s = set()
-        sigma_dict = dict(sigma)  # función característica: p ↦ bool
-
+        sigma_dict = dict(sigma) 
         for q in s:
             state = self.automaton.states[q]
             if state.local:
@@ -145,7 +139,7 @@ class GameArena(Generic[Q, E]):
     def updatem(self, s: Set[int], sigma: E, q: int) -> Set[int]:
         new_s = set()
         for target in self.automaton.states[q].next.values():
-            new_s.update(target)  # ⬅️ CORREGIDO
+            new_s.update(target)
         for q2 in s:
             if q2 != q and not self.automaton.states[q2].existential:
                 for target in self.automaton.states[q2].next.values():
@@ -183,4 +177,3 @@ class GameArena(Generic[Q, E]):
                     label_str = str(label if label is not None else '∅')
 
                 print(f"[{idx}] {source_str} --{label_str}--> [{target_idx}] {target_str}")
-
