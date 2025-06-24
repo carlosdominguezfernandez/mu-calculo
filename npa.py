@@ -30,8 +30,8 @@ class NPA:
     class State:
         def __init__(self, idx: int, priority: int):
             self.idx = idx
-            self.priority = priority  # Omega'(q) = Omega(q) + 1
-            self.next: Dict[Label, Set[int]] = {}  # etiqueta -> conjunto de sucesores
+            self.priority = priority
+            self.next: Dict[Label, Set[int]] = {}
 
     def __init__(self):
         self.states: List[NPA.State] = []
