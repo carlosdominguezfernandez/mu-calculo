@@ -1,6 +1,7 @@
 from gameArena import GameArena
+from apta import APTA
 from npa import NPA, Label
-
+from determiniza import determinize
 
 class ParityGameNode:
     def __init__(self, arena_position, tracking_state, symbol, player: bool, priority: int, idx: int):
@@ -25,12 +26,17 @@ class ParityGame:
             return self.node_map[key]
 
         idx = len(self.nodes)
-        player = self.arena.positions[arena_pos].is_diamond
+        if symbol is None:
+            player = self.arena.positions[arena_pos].is_diamond
+        else:
+            player = False
         priority = self.tracking_aut.states[tracking_state].priority
         node = ParityGameNode(arena_pos, tracking_state, symbol, player, priority, idx)
         self.node_map[key] = node
         self.nodes.append(node)
         return node
+
+
 
     @staticmethod
     def from_formula(formula) -> 'ParityGame':
@@ -40,9 +46,10 @@ class ParityGame:
         arena = GameArena()
         arena.emptyness_arena(apta, formula)
 
-        tracking = NPA().from_apta(apta)
+        npa = NPA().from_apta(apta)
+        dnpa = determinize(npa)
 
-        game = ParityGame(arena, tracking)
+        game = ParityGame(arena, dnpa)
         game.build()
         return game
 
@@ -93,16 +100,18 @@ class ParityGame:
                 if label.type == Label.Type.CHOICE:
                     if label.extra is None:
                         is_compatible = True
-                    elif isinstance(label.extra, tuple):
-                        is_compatible = all(d.get(q) == q_prime for q, q_prime in label.extra)
+                    elif isinstance(label.extra, (tuple,list)):
+                        d_dict = dict(d)
+                        is_compatible = all(d_dict.get(q) == q_prime for q, q_prime in label.extra)
 
                 elif label.type == Label.Type.ANY:
                     is_compatible = True
 
                 elif label.type == Label.Type.STATE:
-                    if isinstance(d, int):
-                        if label.extra is None or d == label.extra:
-                            is_compatible = True
+                    if isinstance(d, int) and isinstance(label.extra, int) and d == label.extra:
+                        is_compatible = True
+                    else:
+                        is_compatible = False
 
                 if is_compatible and label.aprops:
                     is_compatible = all(
@@ -162,11 +171,11 @@ class ParityGame:
                 print(f"   → Nodo {succ.idx}")
 
     def to_pgsolver_format(self, file_path: str):
-
         with open(file_path, "w") as f:
+            f.write(f"parity {len(self.nodes)};\n")
             for node in self.nodes:
                 priority = node.priority
-                player = 0 if node.player else 1  # 0 = existencial, 1 = universal
+                player = 0 if node.player else 1  # 0 = existencial (◇), 1 = universal (☐)
                 successors = ",".join(str(succ.idx) for succ in node.successors)
-                label = f"({node.arena_position},{node.tracking_state},{node.symbol})"
-                f.write(f"{node.idx} {priority} {player} {successors} \"{label}\"\n")
+                f.write(f"{node.idx} {priority} {player} {successors};\n")
+
