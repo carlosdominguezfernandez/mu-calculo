@@ -49,7 +49,7 @@ class APTA[Q, E]:
         for component in sccs:
             if len(component) == 1:
                 q = component[0]
-                if q in graph and q not in graph[q]:  # sin bucle
+                if q in graph and q not in graph[q]:  
                     self.states[q].omega = 0
                     continue
 
@@ -57,8 +57,8 @@ class APTA[Q, E]:
             for q in component:
                 self.states[q].omega = max_priority
 
-    states: list['APTA.State']  # lista de estados
-    state_map: dict[Q, int]     # diccionario de Q a su índice en el array
+    states: list['APTA.State']
+    state_map: dict[Q, int] 
 
     def __init__(self):
         self.states = []
@@ -71,7 +71,6 @@ class APTA[Q, E]:
         '''
 
         if formula not in self.state_map:
-            # Creamos el estado automáticamente a partir de la fórmula
             new_state = self.State(
                 formula,
                 self.get_priority,
@@ -95,7 +94,6 @@ class APTA[Q, E]:
             return 0
 
     def is_local(self, formula: Q) -> bool:
-        # Determina si una fórmula es un estado local
         return formula[0] in [
             Operator.PROP, Operator.NEGATION, Operator.CONJUNCTION,
             Operator.DISJUNCTION, Operator.FIXPOINT_MU, Operator.FIXPOINT_NU
@@ -112,9 +110,6 @@ class APTA[Q, E]:
         # Expande el estado dado añadiendo sus sucesores etiquetados
         state = self.states[state_id]
         f = state.value
-
-        if not isinstance(f, tuple):
-            return  # no se puede expandir
 
         match f[0]:
             case Operator.CONJUNCTION | Operator.DISJUNCTION:
@@ -133,7 +128,7 @@ class APTA[Q, E]:
                 self._add_transition(state, (f[1], False), (Operator.LIT, False))
 
             case Operator.NEGATION:
-                prop = f[1][1]  # f = (¬, (PROP, p))
+                prop = f[1][1]  
                 self._add_transition(state, (prop, True), (Operator.LIT, False))
                 self._add_transition(state, (prop, False), (Operator.LIT, True))
 
