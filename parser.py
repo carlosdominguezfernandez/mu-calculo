@@ -66,10 +66,7 @@ class BaseParser:
 
     def _translate(self, ast):
         """Translate from Lark to our AST format"""
-
         if isinstance(ast, Token):
-            #if ast.type == 'ID':
-                #return Operator.VAR, ast.value
             if ast.type == 'ID':
                 name = ast.value
                 if name[0].isupper():  # Ej: X, Y, Z
@@ -79,7 +76,6 @@ class BaseParser:
 
             elif ast.type == 'LIT':
                 return Operator.LIT, ast.value in ['true', '1']
-
         else:
             args = ast.children
 
@@ -88,7 +84,6 @@ class BaseParser:
                     return Operator[args[0].type], args[1].value, self._translate(args[2])
                 else:
                     return Operator[args[1].type], self._translate(args[0]), self._translate(args[2])
-
             elif len(args) == 2:
                 if args[0].type == 'ONE':
                     return Operator.ONE, "", self._translate(args[1])
@@ -104,8 +99,6 @@ class BaseParser:
         return self._translate(self.parser.parse(text))
 
     def get_subformulas(self, formula):
-        #Dada una fórmula devolver el conjunto de sus subformulas
-
         def extract_subformulas(ast, subformulas):
             if isinstance(ast, tuple):
                 subformulas.add(ast)
@@ -145,7 +138,7 @@ class BaseParser:
             elif f[0] == Operator.NEGATION:
                 process_formula(f[1])
             elif f[0] == Operator.LIT or f[0] == Operator.VAR:
-                pass  # no deeper structure
+                pass  
 
         process_formula(ast)
         return subformulas
@@ -165,4 +158,5 @@ class BaseParser:
         }
 
         return transition_rules.get(q[0], lambda q: {q})(q) if isinstance(q, tuple) else {q}
+
 
