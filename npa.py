@@ -36,21 +36,23 @@ class NPA:
     def __init__(self):
         self.states: List[NPA.State] = []
 
-    def from_apta(self, apta: APTA) -> 'NPA':
+    @staticmethod
+    def from_apta(apta: APTA) -> 'NPA':
         """Construye el tracking automaton a partir de un APTA y su arena."""
-        self.apta = apta
+        npa = NPA()
+        npa.apta = apta
 
         # Inicializamos los estados del NPA
         for q_idx, apta_state in enumerate(apta.states):
             priority = apta_state.omega + 1
-            npa_state = self.State(q_idx, priority)
-            self.states.append(npa_state)
+            npa_state = npa.State(q_idx, priority)
+            npa.states.append(npa_state)
 
         # Expandimos transiciones para cada estado
-        for q_idx in range(len(self.states)):
-            self._expand_state(q_idx)
+        for q_idx in range(len(npa.states)):
+            npa._expand_state(q_idx)
 
-        return self
+        return npa
 
     def _expand_state(self, state_id: int):
         apta_state = self.apta.states[state_id]
@@ -107,3 +109,23 @@ class NPA:
             print(f"Estado {st.idx} (Ω′={st.priority}):")
             for lbl, tgts in st.next.items():
                 print(f"  {lbl} → {tgts}")
+
+if __name__ == "__main__":
+    from parser import BaseParser
+    from apta import APTA
+    from npa import NPA
+
+    # 1. Fórmula de prueba
+    formula_str = "nu X.(X && a) "
+
+    # 2. Parsear
+    parser = BaseParser()
+    formula = parser.parse(formula_str)
+
+    # 3. Construir APTA y calcular prioridades
+    apta = APTA().from_formula(formula)
+    apta.compute_total_priority()
+
+    # 4. Construir NPA desde el APTA
+    npa = NPA.from_apta(apta)
+    npa.print_states()
