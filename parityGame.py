@@ -49,7 +49,7 @@ class ParityGame:
         npa = NPA().from_apta(apta)
         dnpa = determinize(npa)
 
-        game = ParityGame(arena, dnpa)
+        game = ParityGame(arena, npa)
         game.build()
         return game
 
@@ -98,6 +98,8 @@ class ParityGame:
                 is_compatible = False
 
                 if label.type == Label.Type.CHOICE:
+                    if not isinstance(d, frozenset):
+                        continue
                     if label.extra is None:
                         is_compatible = True
                     elif isinstance(label.extra, (tuple,list)):
@@ -170,12 +172,48 @@ class ParityGame:
             for succ in node.successors:
                 print(f"   → Nodo {succ.idx}")
 
+    def _to_pgsolver_format(self):
+        lines = []
+        lines.append(f"parity {len(self.nodes)};\n")
+        for node in self.nodes:
+            priority = node.priority
+            player = 0 if node.player else 1  # 0 = existencial (◇), 1 = universal (☐)
+            # States without successors are not allowed in PGSolver format
+            if node.successors:
+                successors = ",".join(str(succ.idx) for succ in node.successors)
+            else:
+                # player cannot move is replaced by player moves in the same
+                # state forever, but 1 - player must win, so the priority is
+                # adjusted to this effect
+                successors = node.idx
+                priority = 1 - player
+            lines.append(f"{node.idx} {priority} {player} {successors};\n")
+        return ''.join(lines)
+
     def to_pgsolver_format(self, file_path: str):
         with open(file_path, "w") as f:
-            f.write(f"parity {len(self.nodes)};\n")
-            for node in self.nodes:
-                priority = node.priority
-                player = 0 if node.player else 1  # 0 = existencial (◇), 1 = universal (☐)
-                successors = ",".join(str(succ.idx) for succ in node.successors)
-                f.write(f"{node.idx} {priority} {player} {successors};\n")
+            f.write(self._to_pgsolver_format())
 
+from parser import BaseParser
+from parityGame import ParityGame  # Asegúrate de que el archivo se llame parityGame.py
+
+def main():
+    # Fórmula de prueba (usa μ y ν para asegurarte de que haya alternancia)
+    formula_str = "nu X. (X && a)"
+
+    parser = BaseParser()
+    formula = parser.parse(formula_str)
+
+    # Construir el juego de paridad
+    game = ParityGame.from_formula(formula)
+
+    # Imprimir el juego en consola
+    game.print_game()
+
+    # Exportar a PGSolver
+    game.to_pgsolver_format("output.pg")
+
+    print("\nArchivo 'output.pg' generado para PGSolver.")
+
+if __name__ == "__main__":
+    main()
