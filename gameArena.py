@@ -94,6 +94,7 @@ class GameArena(Generic[Q, E]):
                 for sigma in self.extract_alphabet(states, aut):
                     self.add_transition(node, sigma, states, sigma, pending, visited)
 
+
             elif any(self.automaton.states[q].local for q in states):
                 existentials = [q for q in states if
                                 self.automaton.states[q].local and self.automaton.states[q].existential]
@@ -102,7 +103,7 @@ class GameArena(Generic[Q, E]):
                 for successors in product(*choices):
                     for successor_combination in product(*successors):
                         d = frozenset((q, succ) for q, succ in zip(existentials, successor_combination))
-                        if d: 
+                        if d:  # solo guarda los d no vacíos
                             self.d_choices.add(d)
                         d_dict = dict(d)
                         s_prime = self.updatel(states, p, d_dict)
@@ -110,13 +111,23 @@ class GameArena(Generic[Q, E]):
 
             else:
                 existentials = [q for q in states if self.automaton.states[q].existential]
-                for q in existentials:
-                    s_prime = self.updatem(states, p, q)
-                    self.add_transition(node, q, frozenset(s_prime), None, pending, visited)
+
+                if existentials:
+                    for q in existentials:
+                        s_prime = self.updatem(states, p, q)
+                        self.add_transition(node, q, frozenset(s_prime), None, pending, visited)
+
+                else:
+                    universals = [q for q in states if not self.automaton.states[q].existential]
+                    if universals:
+                        q_rep = min(universals) #por coger algún
+                        s_prime = self.updatem(states, p, q_rep)
+                        self.add_transition(node, None, frozenset(s_prime), None, pending, visited)
 
     def updatel(self, s: Set[int], sigma: FrozenSet[Tuple[str, bool]], d: Dict[int, int]) -> Set[int]:
         new_s = set()
-        sigma_dict = dict(sigma) 
+        sigma_dict = dict(sigma)  # función característica: p ↦ bool
+
         for q in s:
             state = self.automaton.states[q]
             if state.local:
@@ -147,11 +158,10 @@ class GameArena(Generic[Q, E]):
         return new_s
 
     def print_arena(self, aut: 'APTA[Q, E]') -> None:
-
         print("\n=== NODOS DE GAME ARENA ===")
         for idx, pos in enumerate(self.positions):
             states = [aut.states[q].value for q in pos.states]
-            symbol = '∅' if pos.symbol is None else set(pos.symbol)
+            symbol = 'None' if pos.symbol is None else set(pos.symbol)
             jugador = "◇" if pos.is_diamond else "☐"
 
             print(f"[{idx}] jugador={jugador} | estados={states} | símbolo={symbol}")
@@ -160,13 +170,13 @@ class GameArena(Generic[Q, E]):
         for idx, pos in enumerate(self.positions):
             source_str = (
                 [aut.states[i].value for i in pos.states],
-                '∅' if pos.symbol is None else set(pos.symbol)
+                'None' if pos.symbol is None else set(pos.symbol)
             )
             for label, target_idx in pos.next:
                 target = self.positions[target_idx]
                 target_str = (
                     [aut.states[i].value for i in target.states],
-                    '∅' if target.symbol is None else set(target.symbol)
+                    'None' if target.symbol is None else set(target.symbol)
                 )
                 if isinstance(label, dict):
                     label_str = "d = { " + ", ".join(
@@ -174,6 +184,26 @@ class GameArena(Generic[Q, E]):
                         for q, t in label.items()
                     ) + " }"
                 else:
-                    label_str = str(label if label is not None else '∅')
+                    label_str = str(label if label is not None else 'None')
 
                 print(f"[{idx}] {source_str} --{label_str}--> [{target_idx}] {target_str}")
+
+
+if __name__ == "__main__":
+    from parser import BaseParser
+    from apta import APTA
+
+    # 1. Fórmula de prueba
+    formula_str = "nu X.(X && a)"
+
+
+    # 2. Parsear
+    parser = BaseParser()
+    formula = parser.parse(formula_str)
+
+    apta = APTA().from_formula(formula)
+
+    arena = GameArena()
+    arena.emptyness_arena(apta, formula)
+    arena.print_arena(apta)
+
