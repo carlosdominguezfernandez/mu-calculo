@@ -99,6 +99,8 @@ class BaseParser:
         return self._translate(self.parser.parse(text))
 
     def get_subformulas(self, formula):
+        #Dada una fórmula devolver el conjunto de sus subformulas
+
         def extract_subformulas(ast, subformulas):
             if isinstance(ast, tuple):
                 subformulas.add(ast)
@@ -138,7 +140,7 @@ class BaseParser:
             elif f[0] == Operator.NEGATION:
                 process_formula(f[1])
             elif f[0] == Operator.LIT or f[0] == Operator.VAR:
-                pass  
+                pass  # no deeper structure
 
         process_formula(ast)
         return subformulas
@@ -159,4 +161,15 @@ class BaseParser:
 
         return transition_rules.get(q[0], lambda q: {q})(q) if isinstance(q, tuple) else {q}
 
+
+def main():
+    formula = "mu X.(p || < >X)"
+    parser = BaseParser()
+    ast = parser.parse(formula)
+    print("Fórmula de entrada:", formula)
+    print("AST resultante:")
+    print(ast)
+
+if __name__ == "__main__":
+    main()
 
