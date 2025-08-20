@@ -2,25 +2,75 @@ import tarjan
 from typing import Dict, Set
 from parser import Operator, BaseParser
 
-def alternation_depth(formula, polarity=None) -> int:
-
+def variable_occurs(var, formula):
+    found = False
     op = formula[0]
 
-    if op in [Operator.FIXPOINT_MU, Operator.FIXPOINT_NU]:
-        current = 0
-        if polarity is None or (polarity == Operator.FIXPOINT_MU and op == Operator.FIXPOINT_NU) or \
-                (polarity == Operator.FIXPOINT_NU and op == Operator.FIXPOINT_MU):
-            current = 1
-        return current + alternation_depth(formula[2], op)
+    if op == Operator.VAR:
+        found = (formula[1] == var)
 
-    if op in [Operator.CONJUNCTION, Operator.DISJUNCTION]:
-        return max(alternation_depth(formula[1], polarity),
-                   alternation_depth(formula[2], polarity))
+    elif op in [Operator.FIXPOINT_MU, Operator.FIXPOINT_NU]:
+        bound = formula[1]
+        if bound != var:
+            found = variable_occurs(var, formula[2])
 
-    if op in [Operator.NEGATION, Operator.ONE, Operator.ALL]:
-        return alternation_depth(formula[1] if len(formula) == 2 else formula[2], polarity)
+    elif op in [Operator.CONJUNCTION, Operator.DISJUNCTION]:
+        found = variable_occurs(var, formula[1]) or variable_occurs(var, formula[2])
 
-    return 0
+    elif op == Operator.NEGATION:
+        found = variable_occurs(var, formula[1])
+
+    elif op in [Operator.ONE, Operator.ALL]:
+        found = variable_occurs(var, formula[2])
+
+    return found
+
+def alternation_depth(formula) -> int:
+
+    def buscar_siguiente_fixpoint(f):
+        op = f[0]
+        if op in [Operator.FIXPOINT_MU, Operator.FIXPOINT_NU]:
+            return f
+        if op in [Operator.CONJUNCTION, Operator.DISJUNCTION]:
+            return buscar_siguiente_fixpoint(f[1]) or buscar_siguiente_fixpoint(f[2])
+        if op == Operator.NEGATION:
+            return buscar_siguiente_fixpoint(f[1])
+        if op in [Operator.ONE, Operator.ALL]:
+            return buscar_siguiente_fixpoint(f[2])
+        return None
+
+    primer_fp = buscar_siguiente_fixpoint(formula)
+    if primer_fp is None:
+        return 0
+
+    outer_op = primer_fp[0]
+    outer_var = primer_fp[1]
+    outer_body = primer_fp[2]
+
+    inner_fp = buscar_siguiente_fixpoint(outer_body)
+    if inner_fp:
+        inner_op, inner_var, inner_body = inner_fp
+        appears = variable_occurs(outer_var, inner_body)
+        step = 1 if appears and outer_op != inner_op else 0
+        return step + alternation_depth(inner_fp)
+    else:
+        if variable_occurs(outer_var, outer_body):
+            return 1
+        else:
+            return 0
+
+
+
+def alternation_level(chi):
+    op = chi[0]
+    d = alternation_depth(chi)
+    if op == Operator.FIXPOINT_MU:
+        return 2 * ((d + 1) // 2) - 1
+    elif op == Operator.FIXPOINT_NU:
+        return 2 * (d // 2)
+    else:
+        return 0
+
 
 class APTA[Q, E]:
     """Alternating parity tree automaton"""
@@ -35,9 +85,7 @@ class APTA[Q, E]:
             self.omega: int = 0  # Total priority (Ω) to be computed
 
     def compute_total_priority(self):
-        """Completa la función de prioridad total Ω a partir de Ω′ y las SCCs del grafo de estados."""
 
-        # 1. Construir el grafo de estados: diccionario {q: [q1, q2, ...]}
         graph = {
             idx: [elem for value in state.next.values() for elem in value]
             for idx, state in enumerate(self.states)
@@ -49,7 +97,7 @@ class APTA[Q, E]:
         for component in sccs:
             if len(component) == 1:
                 q = component[0]
-                if q in graph and q not in graph[q]:  
+                if q in graph and q not in graph[q]:  # sin bucle
                     self.states[q].omega = 0
                     continue
 
@@ -57,8 +105,8 @@ class APTA[Q, E]:
             for q in component:
                 self.states[q].omega = max_priority
 
-    states: list['APTA.State']
-    state_map: dict[Q, int] 
+    states: list['APTA.State']  # lista de estados
+    state_map: dict[Q, int]     # diccionario de Q a su índice en el array
 
     def __init__(self):
         self.states = []
@@ -71,6 +119,7 @@ class APTA[Q, E]:
         '''
 
         if formula not in self.state_map:
+            # Creamos el estado automáticamente a partir de la fórmula
             new_state = self.State(
                 formula,
                 self.get_priority,
@@ -89,11 +138,12 @@ class APTA[Q, E]:
         elif formula == (Operator.LIT, False):
             return 1
         elif isinstance(formula, tuple) and formula[0] in [Operator.FIXPOINT_MU, Operator.FIXPOINT_NU]:
-            return alternation_depth(formula)
+            return alternation_level(formula)
         else:
             return 0
 
     def is_local(self, formula: Q) -> bool:
+        # Determina si una fórmula es un estado local
         return formula[0] in [
             Operator.PROP, Operator.NEGATION, Operator.CONJUNCTION,
             Operator.DISJUNCTION, Operator.FIXPOINT_MU, Operator.FIXPOINT_NU
@@ -128,7 +178,7 @@ class APTA[Q, E]:
                 self._add_transition(state, (f[1], False), (Operator.LIT, False))
 
             case Operator.NEGATION:
-                prop = f[1][1]  
+                prop = f[1][1]  # f = (¬, (PROP, p))
                 self._add_transition(state, (prop, True), (Operator.LIT, False))
                 self._add_transition(state, (prop, False), (Operator.LIT, True))
 
@@ -166,3 +216,20 @@ class APTA[Q, E]:
             print(f"  transiciones (next):")
             for label, target_id in state.next.items():
                 print(f"    con etiqueta {label} → Estado {target_id}")
+
+if __name__ == "__main__":
+    from parser import BaseParser
+    from apta import APTA
+    from npa import NPA
+
+    # 1. Fórmula de prueba
+    formula_str = "nu X.(mu Y. Y && a)"
+    # 2. Parsear
+    parser = BaseParser()
+    formula = parser.parse(formula_str)
+
+    print(alternation_depth(formula))
+    # 3. Construir APTA y calcular prioridades
+    apta = APTA().from_formula(formula)
+    apta.compute_total_priority()
+    apta.print_states()
