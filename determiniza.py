@@ -6,7 +6,9 @@ import buddy
 import spot
 
 
-from mu_calculo import Label, NPA, APTA, get_propositions
+from npa import NPA, Label
+from apta import APTA
+from gameArena import get_propositions
 
 
 class BDDMapping:
@@ -21,7 +23,7 @@ class BDDMapping:
 
 		# Local disjunctive states with at least one succesor
 		self.local_ex_states = [state_id for state_id, state in enumerate(apta.states)
-		                        if state.local and state.existential 
+		                        if state.local and state.existential
 					and sum(len(sucs) for sucs in state.next.values()) > 1]
 		# Model disjunctive states
 		self.modal_ex_states = [state_id for state_id, state in enumerate(apta.states)
@@ -46,7 +48,7 @@ class BDDMapping:
 
 		# Complete AP with the control variable
 		self.ap_map['_is_choice'] = buddy.bdd_ithvar(aut.register_ap('_is_choice'))
-	
+
 	def _literal(self, name: str, value: bool = True):
 		"""Literal variable"""
 
@@ -70,17 +72,17 @@ class BDDMapping:
 					for k in range(self.state_length):
 						clauses.append(self._literal(f'_u{k}', num % 2 != 0))
 						num //= 2
-		
+
 			case Label.Type.CHOICE:
 				clauses.append(self.ap_map['_is_choice'])
-				
+
 				if label.extra:
 					# In principle, there is only one
 					for p, q in label.extra:
 						# States with a single successor are not considered. All other
 						# disjunctive states are assigned an auxiliary variable and
 						# that holds whenever the choice is for the second state
-						if p_index := self.local_ex_map.get(p):
+						if (p_index := self.local_ex_map.get(p)) is not None:
 							second = q != self.local_children[p_index][0]
 							clauses.append(self._literal(f'_u{p_index}', second))
 
@@ -144,9 +146,9 @@ class BDDMapping:
 					value = values.get(f'_u{k}')
 
 					if value is not None:
-						choice.append((state_nr, self.local_children[1 if value else 0]))
+						choice.append((state_nr, self.local_children[k][1 if value else 0]))
 
-				yield Label(Label.Type.CHOICE, extra=tuple(choice), aprops=aprops) 
+				yield Label(Label.Type.CHOICE, extra=tuple(choice), aprops=aprops)
 
 			# The second coordinate is a modal state
 			else:
@@ -176,7 +178,7 @@ def determinize(automaton: NPA):
 
 	# Register atomic propositions
 	bddm = BDDMapping(automaton.apta, aut)
-	
+
 	# State-based parity acceptance
 	omega_max = max(state.priority for state in automaton.states)
 
@@ -221,7 +223,7 @@ def determinize(automaton: NPA):
 		# Set the transition
 		for label in bddm.translate_back_label(edge.cond, bdict):
 			src_state.next.setdefault(label, []).append(edge.dst)
-	
+
 	return new_aut
 
 
