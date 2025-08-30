@@ -49,7 +49,7 @@ class ParityGame:
         npa = NPA().from_apta(apta)
         dnpa = determinize(npa)
 
-        game = ParityGame(arena, npa)
+        game = ParityGame(arena, dnpa)
         game.build()
         return game
 
@@ -217,3 +217,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
