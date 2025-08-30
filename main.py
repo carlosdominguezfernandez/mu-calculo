@@ -13,7 +13,7 @@ from parityGame import ParityGame
 def main():
 	import argparse
 	parser = argparse.ArgumentParser()
-	parser.add_argument('< > False', help='Fórmula')
+	parser.add_argument('formula', help='Fórmula')
 
 	args = parser.parse_args()
 
@@ -33,4 +33,4 @@ def main():
 
 
 if __name__ == '__main__':
-	sys.exit(main()
+	sys.exit(main())
