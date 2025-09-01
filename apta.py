@@ -2,6 +2,7 @@ import tarjan
 from typing import Dict, Set
 from parser import Operator, BaseParser
 
+
 def variable_occurs(var, formula):
     found = False
     op = formula[0]
@@ -25,40 +26,56 @@ def variable_occurs(var, formula):
 
     return found
 
+
+def buscar_siguiente_fixpoint(f):
+    op = f[0]
+    if op in [Operator.FIXPOINT_MU, Operator.FIXPOINT_NU]:
+        return f
+    if op in [Operator.CONJUNCTION, Operator.DISJUNCTION]:
+        return buscar_siguiente_fixpoint(f[1]) or buscar_siguiente_fixpoint(f[2])
+    if op == Operator.NEGATION:
+        return buscar_siguiente_fixpoint(f[1])
+    if op in [Operator.ONE, Operator.ALL]:
+        return buscar_siguiente_fixpoint(f[2])
+    return None
+
+
+def recoger_fixpoints(f):
+    op = f[0]
+    res = []
+    if op in [Operator.FIXPOINT_MU, Operator.FIXPOINT_NU]:
+        res.append(f)
+        res += recoger_fixpoints(f[2])  # seguir dentro del cuerpo
+    elif op in [Operator.CONJUNCTION, Operator.DISJUNCTION]:
+        res += recoger_fixpoints(f[1])
+        res += recoger_fixpoints(f[2])
+    elif op == Operator.NEGATION:
+        res += recoger_fixpoints(f[1])
+    elif op in [Operator.ONE, Operator.ALL]:
+        res += recoger_fixpoints(f[2])
+    return res
+
+
 def alternation_depth(formula) -> int:
-
-    def buscar_siguiente_fixpoint(f):
-        op = f[0]
-        if op in [Operator.FIXPOINT_MU, Operator.FIXPOINT_NU]:
-            return f
-        if op in [Operator.CONJUNCTION, Operator.DISJUNCTION]:
-            return buscar_siguiente_fixpoint(f[1]) or buscar_siguiente_fixpoint(f[2])
-        if op == Operator.NEGATION:
-            return buscar_siguiente_fixpoint(f[1])
-        if op in [Operator.ONE, Operator.ALL]:
-            return buscar_siguiente_fixpoint(f[2])
-        return None
-
-    primer_fp = buscar_siguiente_fixpoint(formula)
-    if primer_fp is None:
+    outer = buscar_siguiente_fixpoint(formula)
+    if outer is None:
         return 0
 
-    outer_op = primer_fp[0]
-    outer_var = primer_fp[1]
-    outer_body = primer_fp[2]
+    outer_op, outer_var, outer_body = outer
 
-    inner_fp = buscar_siguiente_fixpoint(outer_body)
-    if inner_fp:
-        inner_op, inner_var, inner_body = inner_fp
-        appears = variable_occurs(outer_var, inner_body)
-        step = 1 if appears and outer_op != inner_op else 0
-        return step + alternation_depth(inner_fp)
-    else:
-        if variable_occurs(outer_var, outer_body):
-            return 1
-        else:
-            return 0
+    mejor = 0
+    for inner in recoger_fixpoints(outer_body):
+        inner_op, _, inner_body = inner
+        aparece = variable_occurs(outer_var, inner_body)
+        paso = 1 if aparece and outer_op != inner_op else 0
+        cand = paso + alternation_depth(inner)
+        if cand > mejor:
+            mejor = cand
 
+    if mejor == 0 and variable_occurs(outer_var, outer_body):
+        mejor = 1
+
+    return mejor
 
 
 def alternation_level(chi):
@@ -233,3 +250,4 @@ if __name__ == "__main__":
     apta = APTA().from_formula(formula)
     apta.compute_total_priority()
     apta.print_states()
+
